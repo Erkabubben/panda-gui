@@ -51,24 +51,24 @@ template.innerHTML = `
       outline: 4px solid orange;
       outline-offset: -4px;
     }
-    #top-container {
+    #image-select-top-container {
       display: inline-block;
       border: 2px solid grey;
       height: 200px;
       overflow: hidden;
       white-space: nowrap;
     }
-    #top-container div {
+    #image-select-top-container div {
       position: relative;
       height: 200px;
     }
-    #top-container div#top-left-container {
+    #image-select-top-container div#top-left-container {
       float:left;
     }
-    #top-container div#top-right-container {
+    #image-select-top-container div#top-right-container {
       float:left;
     }
-    #top-container div img {
+    #image-select-top-container div img {
       height: 100%;
     }
     p.bottom-right-text {
@@ -81,12 +81,69 @@ template.innerHTML = `
       border: 2px solid grey;
       margin-bottom: 4px;
     }
+    #cinematic-effect-state {
+      width: 100%;
+      padding: 0px;
+    }
+    #edit-effect-container {
+      position: relative;
+      padding: 0px;
+      margin: 0px;
+    }
+    #edit-effect-image {
+      position: relative;
+      width: 100%;
+    }
+    #edit-effect-borders {
+      position: absolute;
+      border: 2px solid red;
+    }
+    #edit-effect-start-margin-line, #edit-effect-end-margin-line {
+      position: absolute;
+      border-left: 3px solid green;
+      height: 100%;
+      top: 0px;
+    }
+    #preview-effect-container {
+      position: relative;
+      overflow: hidden;
+      height: 200px;
+      width: 354px;
+      margin-left: auto;
+      margin-right: auto;
+      margin-bottom: 4px;
+    }
+    #preview-effect-image {
+      position: absolute;
+      width: 100%;
+    }
   </style>
+  <style id="edit-effect-borders-style"></style>
+  <style id="preview-effect-style"></style>
+  <style id="preview-effect-animation-style"></style>
   <div id="file-operations-container">
     <input id="file-input" type="file" webkitdirectory directory multiple>
     <button id="rename-to-3-digits-button">Rename to 3 Digits</button>
   </div>
-  <div id="top-container">
+  <div id="cinematic-effect-state">
+    <div id="preview-effect-container">
+      <img id="preview-effect-image" src="./test-image.jpg">
+    </div>
+    <div id="edit-effect-container">
+      <img id="edit-effect-image" src="./test-image.jpg">
+      <div id="edit-effect-borders"></div>
+      <div id="edit-effect-start-margin-line"></div>
+      <div id="edit-effect-end-margin-line"></div>
+    </div>
+    <div id="edit-effect-controls">
+      <input type="range" min="0" max="100" value="50" class="slider" id="duration-slider">
+      <input type="range" min="10" max="50" value="10" class="slider" id="zoom-slider">
+      <input type="range" min="0" max="100" value="50" class="slider" id="position-slider">
+      <input type="range" min="0" max="100" value="0" class="slider" id="start-margin-slider">
+      <input type="range" min="0" max="100" value="0" class="slider" id="end-margin-slider">
+    </div>
+  </div>
+  <div id="image-select-top-container">
     <div id="top-left-container">
       <img id="current-image"></img>
       <p id="current-image-text" class="bottom-right-text">image-0</p>
@@ -116,27 +173,68 @@ customElements.define('panda-gui',
         .appendChild(template.content.cloneNode(true))
 
       // TODO: Maybee you need to define some default values here
+      this._workspaceFolder = '';
+      this._vscodeApi = acquireVsCodeApi();
+
+      // Cinematic Select State and Portrait Select State
+      this._imageSelectTopContainer = this.shadowRoot.querySelector('#image-select-top-container')
       this._currentImage = this.shadowRoot.querySelector('img#current-image')
       this._currentImageText = this.shadowRoot.querySelector('#current-image-text')
       this._hoveredImage = this.shadowRoot.querySelector('img#hovered-image')
       this._hoveredImageText = this.shadowRoot.querySelector('#hovered-image-text')
+
       this._selectableImagesContainer = this.shadowRoot.querySelector('#selectable-images-container')
-      this._workspaceFolder = '';
-      this._vscodeApi = acquireVsCodeApi();
+
+      // File renaming field
       this._selectFileInput = this.shadowRoot.querySelector('#file-input')
       this._lastSelectedFiles = null
       this._renameTo3DigitsButton = this.shadowRoot.querySelector('#rename-to-3-digits-button')
-      //this.shadowRoot.querySelector('#file-operations-container').style.display = 'none'
 
+      // Cinematic Effect State
+      this._cinematicEffectState = this.shadowRoot.querySelector('#cinematic-effect-state')
+
+      // Edit Effect
+      this._editEffectImage = this._cinematicEffectState.querySelector('#edit-effect-image')
+      this._editEffectBordersStyle = this.shadowRoot.querySelector('style#edit-effect-borders-style')
+
+      this._durationSlider = this.sliderSetup('#duration-slider', 'duration', 0.1)
+      this._zoomSlider = this.sliderSetup('#zoom-slider', 'zoom', 0.1)
+      this._positionSlider = this.sliderSetup('#position-slider', 'position', 0.01)
+      this._startMarginSlider = this.sliderSetup('#start-margin-slider', 'start-margin', 0.01)
+      this._endMarginSlider = this.sliderSetup('#end-margin-slider', 'end-margin', 0.01)
+
+      // Preview Effect
+      this._previewEffectImage = this._cinematicEffectState.querySelector('#preview-effect-image')
+      this._previewEffectStyle = this.shadowRoot.querySelector('style#preview-effect-style')
+      this._previewEffectAnimationStyle = this.shadowRoot.querySelector('style#preview-effect-animation-style')
+
+      // Message Events
       window.addEventListener('message', event => {
-        if (event.data.command == 'changed-selection') {
-          this.onSelectionChange(event)
+
+        if (event.data.command == 'set-state') {
+          this._imageSelectTopContainer.style.display = 'none'
+          this._selectableImagesContainer.style.display = 'none'
+          this._cinematicEffectState.style.display = 'none'
+          if (event.data.state == 'cinematic-select-state' || event.data.state == 'portrait-select-state') {
+            this._imageSelectTopContainer.style.display = ''
+            this._selectableImagesContainer.style.display = ''
+          }
+          if (event.data.state == 'cinematic-effect-state') {
+            this._cinematicEffectState.style.display = ''
+          }
+        }
+
+        if (event.data.command == 'update-current-image') {
+          this.updateCurrentImage(event)
         } else if (event.data.command == 'set-workspace-folder') {
           this._workspaceFolder = event.data.workspaceFolder
         } else if (event.data.command == 'no-selection') {
           this._currentImage.removeAttribute('src')
-        } else if (event.data.command == 'update-selectable-images')
+        } else if (event.data.command == 'update-selectable-images') {
           this.updateSelectableImages(event)
+        } else if (event.data.command == 'set-edit-effect-image') {
+          this.setEditEffectImage(event)
+        }
       })
 
       this._selectFileInput.onchange = () => {
@@ -162,7 +260,114 @@ customElements.define('panda-gui',
       })
     }
 
-    onSelectionChange (event) {
+    sliderSetup(querySelector, controlName, valueModifier) {
+      let slider = this._cinematicEffectState.querySelector(querySelector)
+      slider.onchange = () => {
+        this._vscodeApi.postMessage({
+          command: 'effect-slider-change',
+          control: controlName,
+          value: slider.value * valueModifier
+        })
+      }
+      slider.oninput = () => { this.updateEditEffectBordersStyle(), this.updatePreviewEffectStyle() }
+      return slider
+    }
+
+    setEditEffectImage (event) {
+      let params = {
+        duration: event.data.lineContent.params[0],
+        zoom: event.data.lineContent.params[1],
+        position: event.data.lineContent.params[2],
+        startMargin: event.data.lineContent.params[3],
+        endMargin: event.data.lineContent.params[4]
+      }
+
+      this._durationSlider.value = params.duration
+
+      if (event.data.lineContent.params.length > 1) {
+        this._zoomSlider.value = params.zoom  * 10
+      }
+      if (event.data.lineContent.params.length > 2) {
+        this._positionSlider.value = params.position * 100
+      }
+      if (event.data.lineContent.params.length > 3) {
+        this._startMarginSlider.value = params.startMargin * 100
+      }
+      if (event.data.lineContent.params.length > 4) {
+        this._endMarginSlider.value = params.endMargin * 100
+      }
+
+      this._editEffectImage.setAttribute('src', event.data.image.Uri)
+      this._previewEffectImage.setAttribute('src', event.data.image.Uri)
+
+      this.updateEditEffectBordersStyle()
+    }
+
+    updateEditEffectBordersStyle () {
+      let bordersZoom = (1 / (this._zoomSlider.value / 10)) * 100
+      let bordersPos = 50
+
+      let positionDifference = (100 - bordersZoom)
+      let positionLowest = 50 - (positionDifference / 2)
+      bordersPos = positionLowest + ((this._positionSlider.value * 0.01) * positionDifference)
+
+      let startMargin = this._startMarginSlider.value
+      let endMargin = this._endMarginSlider.value
+
+      this._editEffectBordersStyle.textContent = `
+      #edit-effect-borders {
+        transform: translate(-50%, 50%);
+        width: ${bordersZoom}%;
+        height: ${bordersZoom}%;
+        bottom: ${bordersPos}%;
+        left: 50%;
+      }
+      #edit-effect-start-margin-line {
+        right: ${startMargin}%;
+      }
+      #edit-effect-end-margin-line {
+        left: ${endMargin}%;
+      }
+      `
+    }
+
+    updatePreviewEffectStyle () {
+      let previewImageZoom = (this._zoomSlider.value / 10) * 100
+      let previewImagePos = 50
+
+      let positionDifference = (100 - previewImageZoom)
+      let positionHighest = 50 + (positionDifference / 2)
+      previewImagePos = positionHighest - ((1 - (this._positionSlider.value * 0.01)) * positionDifference)
+
+      this._previewEffectStyle.textContent = `#preview-effect-image {
+        transform: translate(-50%, 50%);
+        width: ${previewImageZoom}%;
+        height: ${previewImageZoom}%;
+        bottom: ${previewImagePos}%;
+      }`
+
+      let animPositionDifference = (100 - previewImageZoom)
+      let animPositionHighest = 50 + (animPositionDifference / 2)
+      let animPositionLowest = 50 - (animPositionDifference / 2)
+
+      this._previewEffectAnimationStyle.textContent = `
+      @keyframes preview-effect-animation {
+        from {
+          left: ${animPositionHighest}%;
+        }
+        to {
+          left: ${animPositionLowest}%;
+        }
+      }
+      #preview-effect-image {
+        animation-name: preview-effect-animation;
+        animation-duration: 7s;
+        animation-iteration-count: infinite;
+        animation-timing-function: linear;
+      }`
+    }
+
+    updateCurrentImage (event) {
       this._currentImage.setAttribute('src', event.data.image.Uri)
       this._currentImage.setAttribute('file', event.data.image.fileName)
       this._currentImageText.textContent = this.removeFileExtension(event.data.image.fileName)
