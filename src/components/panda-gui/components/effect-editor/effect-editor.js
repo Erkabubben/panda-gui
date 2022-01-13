@@ -38,11 +38,11 @@ template.innerHTML = `
       position: relative;
       width: 100%;
     }
-    #edit-effect-start-borders {
+    #edit-effect-start-frame {
       position: absolute;
-      border: 2px solid red;
+      border: 2px solid green;
     }
-    #edit-effect-end-borders {
+    #edit-effect-end-frame {
       position: absolute;
       border: 2px solid red;
     }
@@ -66,8 +66,8 @@ template.innerHTML = `
       width: 100%;
     }
   </style>
-  <style id="edit-effect-start-borders-style"></style>
-  <style id="edit-effect-end-borders-style"></style>
+  <style id="edit-effect-start-frame-style"></style>
+  <style id="edit-effect-end-frame-style"></style>
   <style id="preview-effect-style"></style>
   <style id="preview-effect-animation-style"></style>
   <div id="cinematic-effect-state">
@@ -76,15 +76,17 @@ template.innerHTML = `
     </div>
     <div id="edit-effect-container">
       <img id="edit-effect-image" src="./test-image.jpg">
-      <div id="edit-effect-start-borders"></div>
-      <div id="edit-effect-end-borders"></div>
+      <div id="edit-effect-start-frame"></div>
+      <div id="edit-effect-end-frame"></div>
     </div>
     <div id="edit-effect-controls">
       <input type="range" min="0" max="100" value="50" class="slider" id="duration-slider">
-      <input type="range" min="10" max="50" value="10" class="slider" id="zoom-slider">
-      <input type="range" min="0" max="100" value="50" class="slider" id="position-slider">
-      <input type="range" min="0" max="100" value="0" class="slider" id="start-margin-slider">
-      <input type="range" min="0" max="100" value="0" class="slider" id="end-margin-slider">
+      <input type="range" min="10" max="50" value="10" class="slider" id="start-zoom-slider">
+      <input type="range" min="0" max="100" value="50" class="slider" id="start-pos-x-slider">
+      <input type="range" min="0" max="100" value="50" class="slider" id="start-pos-y-slider">
+      <input type="range" min="10" max="50" value="10" class="slider" id="end-zoom-slider">
+      <input type="range" min="0" max="100" value="50" class="slider" id="end-pos-x-slider">
+      <input type="range" min="0" max="100" value="50" class="slider" id="end-pos-y-slider">
     </div>
   </div>
 `
@@ -115,14 +117,16 @@ customElements.define('effect-editor',
 
       // Edit Effect
       this._editEffectImage = this._cinematicEffectState.querySelector('#edit-effect-image')
-      this._editEffectStartBordersStyle = this.shadowRoot.querySelector('style#edit-effect-start-borders-style')
-      this._editEffectEndBordersStyle = this.shadowRoot.querySelector('style#edit-effect-end-borders-style')
+      this._editEffectStartFrameStyle = this.shadowRoot.querySelector('style#edit-effect-start-frame-style')
+      this._editEffectEndFrameStyle = this.shadowRoot.querySelector('style#edit-effect-end-frame-style')
 
-      this._durationSlider = this.sliderSetup('#duration-slider', 'duration', 0.1)
-      this._zoomSlider = this.sliderSetup('#zoom-slider', 'zoom', 0.1)
-      this._positionSlider = this.sliderSetup('#position-slider', 'position', 0.01)
-      this._startMarginSlider = this.sliderSetup('#start-margin-slider', 'start-margin', 0.01)
-      this._endMarginSlider = this.sliderSetup('#end-margin-slider', 'end-margin', 0.01)
+      this._durationSlider = this.sliderSetup('#duration-slider', 0, 0.1)
+      this._startZoomSlider = this.sliderSetup('#start-zoom-slider', 1, 0.1)
+      this._startPosXSlider = this.sliderSetup('#start-pos-x-slider', 2, 0.01)
+      this._startPosYSlider = this.sliderSetup('#start-pos-y-slider', 3, 0.01)
+      this._endZoomSlider = this.sliderSetup('#end-zoom-slider', 4, 0.1)
+      this._endPosXSlider = this.sliderSetup('#end-pos-x-slider', 5, 0.01)
+      this._endPosYSlider = this.sliderSetup('#end-pos-y-slider', 6, 0.01)
 
       // Preview Effect
       this._previewEffectImage = this._cinematicEffectState.querySelector('#preview-effect-image')
@@ -150,108 +154,133 @@ customElements.define('effect-editor',
       this._vscodeApi = vscodeApiInstance
     }
 
-    sliderSetup (querySelector, controlName, valueModifier) {
+    sliderSetup (querySelector, paramNumber, valueModifier) {
       let slider = this._cinematicEffectState.querySelector(querySelector)
       slider.onchange = () => {
         this._vscodeApi.postMessage({
           command: 'effect-slider-change',
-          control: controlName,
+          paramNumber: paramNumber,
           value: slider.value * valueModifier
         })
       }
-      slider.oninput = () => { this.updateEditEffectBordersStyle(), this.updatePreviewEffectStyle() }
+      slider.oninput = () => {
+        this.updateEditEffectFrameStyles()
+        this.updatePreviewEffectStyle()
+      }
       return slider
     }
 
     setEditEffectImage (event) {
       let params = {
         duration: event.data.lineContent.params[0],
-        zoom: event.data.lineContent.params[1],
-        position: event.data.lineContent.params[2],
-        startMargin: event.data.lineContent.params[3],
-        endMargin: event.data.lineContent.params[4]
+        startZoom: event.data.lineContent.params[1],
+        startX: event.data.lineContent.params[2],
+        startY: event.data.lineContent.params[3],
+        endZoom: event.data.lineContent.params[4],
+        endX: event.data.lineContent.params[5],
+        endY: event.data.lineContent.params[6],
       }
 
       this._durationSlider.value = params.duration
 
       if (event.data.lineContent.params.length > 1) {
-        this._zoomSlider.value = params.zoom  * 10
+        this._startZoomSlider.value = params.startZoom  * 10
       }
       if (event.data.lineContent.params.length > 2) {
-        this._positionSlider.value = params.position * 100
+        this._startPosXSlider.value = params.startX * 100
       }
       if (event.data.lineContent.params.length > 3) {
-        this._startMarginSlider.value = params.startMargin * 100
+        this._startPosYSlider.value = params.startY * 100
       }
       if (event.data.lineContent.params.length > 4) {
-        this._endMarginSlider.value = params.endMargin * 100
+        this._endZoomSlider.value = params.endZoom  * 10
+      }
+      if (event.data.lineContent.params.length > 5) {
+        this._endPosXSlider.value = params.endX * 100
+      }
+      if (event.data.lineContent.params.length > 6) {
+        this._endPosYSlider.value = params.endY * 100
       }
 
       this._editEffectImage.setAttribute('src', event.data.image.Uri)
       this._previewEffectImage.setAttribute('src', event.data.image.Uri)
 
-      this.updateEditEffectBordersStyle()
+      this.updateEditEffectFrameStyles()
     }
 
-    updateEditEffectBordersStyle () {
-      let bordersZoom = (1 / (this._zoomSlider.value / 10)) * 100
-      let bordersPos = 50
+    updateEditEffectFrameStyles () {
+      let startZoom = (1 / (this._startZoomSlider.value / 10)) * 100
+      let startX = this.GetFramePositionFromZoomAndSlider(startZoom, this._startPosXSlider)
+      let startY = this.GetFramePositionFromZoomAndSlider(startZoom, this._startPosYSlider)
 
-      let positionDifference = (100 - bordersZoom)
-      let positionLowest = 50 - (positionDifference / 2)
-      bordersPos = positionLowest + ((this._positionSlider.value * 0.01) * positionDifference)
+      let endZoom = (1 / (this._endZoomSlider.value / 10)) * 100
+      let endX = this.GetFramePositionFromZoomAndSlider(endZoom, this._endPosXSlider)
+      let endY = this.GetFramePositionFromZoomAndSlider(endZoom, this._endPosYSlider)
 
-      let startMargin = this._startMarginSlider.value
-      let endMargin = this._endMarginSlider.value
-
-      this._editEffectStartBordersStyle.textContent = `
-      #edit-effect-start-borders {
+      this._editEffectStartFrameStyle.textContent = `
+      #edit-effect-start-frame {
         transform: translate(-50%, 50%);
-        width: ${bordersZoom}%;
-        height: ${bordersZoom}%;
-        bottom: ${bordersPos}%;
-        left: 50%;
+        width: ${startZoom}%;
+        height: ${startZoom}%;
+        left: ${startX}%;
+        bottom: ${startY}%;
       }
-      #edit-effect-start-margin-line {
-        right: ${startMargin}%;
-      }
-      #edit-effect-end-margin-line {
-        left: ${endMargin}%;
+      #edit-effect-end-frame {
+        transform: translate(-50%, 50%);
+        width: ${endZoom}%;
+        height: ${endZoom}%;
+        left: ${endX}%;
+        bottom: ${endY}%;
       }
       `
     }
 
-    updatePreviewEffectStyle () {
-      let previewImageZoom = (this._zoomSlider.value / 10) * 100
-      let previewImagePos = 50
+    GetFramePositionFromZoomAndSlider (zoom, slider) {
+      let positionDifference = (100 - zoom)
+      let positionLowest = 50 - (positionDifference / 2)
+      return positionLowest + ((slider.value * 0.01) * positionDifference)
+    }
 
-      let positionDifference = (100 - previewImageZoom)
+    GetPreviewImagePositionFromZoomAndSlider (zoom, slider) {
+      let positionDifference = (100 - zoom)
       let positionHighest = 50 + (positionDifference / 2)
-      previewImagePos = positionHighest - ((1 - (this._positionSlider.value * 0.01)) * positionDifference)
+      return positionHighest - ((1 - (slider.value * 0.01)) * positionDifference)
+    }
+
+    updatePreviewEffectStyle () {
+      let previewImageStartZoom = (this._startZoomSlider.value / 10) * 100
+      let previewImageStartX = this.GetPreviewImagePositionFromZoomAndSlider(previewImageStartZoom, this._startPosXSlider)
+      let previewImageStartY = this.GetPreviewImagePositionFromZoomAndSlider(previewImageStartZoom, this._startPosYSlider)
+
+      let previewImageEndZoom = (this._endZoomSlider.value / 10) * 100
+      let previewImageEndX = this.GetPreviewImagePositionFromZoomAndSlider(previewImageEndZoom, this._endPosXSlider)
+      let previewImageEndY = this.GetPreviewImagePositionFromZoomAndSlider(previewImageEndZoom, this._endPosYSlider)
 
       this._previewEffectStyle.textContent = `#preview-effect-image {
         transform: translate(-50%, 50%);
-        width: ${previewImageZoom}%;
-        height: ${previewImageZoom}%;
-        bottom: ${previewImagePos}%;
+        width: ${previewImageStartZoom}%;
+        height: ${previewImageStartZoom}%;
+        bottom: ${previewImageStartX}%;
       }`
-
-      let animPositionDifference = (100 - previewImageZoom)
-      let animPositionHighest = 50 + (animPositionDifference / 2)
-      let animPositionLowest = 50 - (animPositionDifference / 2)
 
       this._previewEffectAnimationStyle.textContent = `
       @keyframes preview-effect-animation {
         from {
-          left: ${animPositionHighest}%;
+          width: ${previewImageStartZoom}%;
+          height: ${previewImageStartZoom}%;
+          left: ${previewImageStartX}%;
+          bottom: ${previewImageStartY}%;
         }
         to {
-          left: ${animPositionLowest}%;
+          width: ${previewImageEndZoom}%;
+          height: ${previewImageEndZoom}%;
+          left: ${previewImageEndX}%;
+          bottom: ${previewImageEndY}%;
         }
       }
       #preview-effect-image {
         animation-name: preview-effect-animation;
-        animation-duration: 7s;
+        animation-duration: ${this._durationSlider.value}s;
         animation-iteration-count: infinite;
         animation-timing-function: linear;
       }`

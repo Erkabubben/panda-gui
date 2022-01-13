@@ -108,7 +108,7 @@ function activate(context) {
 						} else if (message.command == 'rename-to-3-digits') {
 							RenameFilesTo3Digits(message)
 						} else if (message.command == 'effect-slider-change' && lastActiveTextEditor) {
-							OnSliderInput(message)
+							SetPandaParam(message.paramNumber, message.value)
 						}
 					},
 					undefined,
@@ -129,11 +129,13 @@ function activate(context) {
 	);
 }
 
-function OnSliderInput (message) {
+function SetPandaParam (paramNumber, newValue) {
 	let selectedLineAt = lastActiveTextEditor.selection.active.line
 	let line = lastActiveTextEditor.document.lineAt(selectedLineAt);
 
-	switch (message.control) {
+	ReplacePandaParam(line, paramNumber, GetAsPandaFloat(newValue.toFixed(2)))
+
+	/*switch (message.control) {
 		case 'duration':
 			ReplacePandaParam(line, 0, GetAsPandaFloat(message.value.toFixed(2)))
 			break;
@@ -149,7 +151,7 @@ function OnSliderInput (message) {
 		case 'end-margin':
 			ReplacePandaParam(line, 4, GetAsPandaFloat(message.value.toFixed(2)))
 			break;
-	}
+	}*/
 
 	PlaceTextEditorCursorAtEndOfLine(selectedLineAt)
 }
