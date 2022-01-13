@@ -3,8 +3,10 @@
 const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
-//import * as vscode from 'vscode';
-//import * as path from 'path';
+//const pandaUtils = require('./panda-utils.js');
+/*import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';*/
 
 let currentPanel = undefined
 let lastActiveTextEditor = null
@@ -15,6 +17,8 @@ let pandaGUIData = null
 let gamepacksToBeLoaded = null
 let cinematicsFolderPath = ''
 let charactersFolderPath = ''
+let blockNextOnTextEditorSelectionEvent = false
+let updateWebviewOnNextTextEditEvent = false
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -53,70 +57,144 @@ function activate(context) {
 				{
 					// Enable scripts in the webview
 					enableScripts: true
-				}
-			);
+				});
 
-			//vscode.window.activeTextEditor
-			currentWorkspaceFolder = getProjectRoot()
+				//vscode.window.activeTextEditor
+				currentWorkspaceFolder = getProjectRoot()
 
-			pandaGUIData = require(path.join(currentWorkspaceFolder, pandaGUIDataPath))
-			gamepacksToBeLoaded = setGamepacksToBeLoadedArray()
-			cinematicsFolderPath = path.join(
-				'Assets' , '_Project', 'Resources', 'Gamepacks', gamepacksToBeLoaded[0], 'Cinematics')
-			charactersFolderPath = path.join(
-				'Assets' , '_Project', 'Resources', 'Gamepacks', gamepacksToBeLoaded[0], 'Characters')
+				pandaGUIData = require(path.join(currentWorkspaceFolder, pandaGUIDataPath))
+				//import * as pandaData from (path.join(currentWorkspaceFolder, pandaGUIDataPath))
 
-			//gamepacksToBeLoaded = setGamepacksToBeLoadedArray()
+				gamepacksToBeLoaded = setGamepacksToBeLoadedArray()
+				cinematicsFolderPath = path.join(
+					'Assets' , '_Project', 'Resources', 'Gamepacks', gamepacksToBeLoaded[0], 'Cinematics')
+				charactersFolderPath = path.join(
+					'Assets' , '_Project', 'Resources', 'Gamepacks', gamepacksToBeLoaded[0], 'Characters')
 
-			// Get path to resource on disk
-			const onDiskPath = vscode.Uri.file(
-				path.join(context.extensionPath, 'src', 'components', 'panda-gui', 'index.js')
-			);
-	
-			// And get the special URI to use with the webview
-			const scriptWebviewUri = currentPanel.webview.asWebviewUri(onDiskPath);
+				//gamepacksToBeLoaded = setGamepacksToBeLoadedArray()
 
-			currentPanel.webview.html = customComponentContent(scriptWebviewUri)
+				// Get path to resource on disk
+				const onDiskPath = vscode.Uri.file(
+					path.join(context.extensionPath, 'src', 'components', 'panda-gui', 'index.js')
+				);
+		
+				// And get the special URI to use with the webview
+				const scriptWebviewUri = currentPanel.webview.asWebviewUri(onDiskPath);
 
-			// Event fired on changes to the active text editor
-			vscode.workspace.onDidChangeTextDocument(changeEvent => {
-				OnUserChangedTextInDocument(changeEvent)
-			});
+				currentPanel.webview.html = customComponentContent(scriptWebviewUri)
 
-			// Event fired when changing selection in the active text editor
-			vscode.window.onDidChangeTextEditorSelection(changeEvent => {
-				lastActiveTextEditor = vscode.window.activeTextEditor
-				OnUserChangedSelection(changeEvent)
-			});
+				// Event fired on changes to the active text editor
+				vscode.workspace.onDidChangeTextDocument(changeEvent => {
+					OnUserChangedTextInDocument(changeEvent)
+				})
 
-			//currentPanel.webview.html = getWebviewContent('Coding Cat');
-
-			// Handle messages from the webview
-			currentPanel.webview.onDidReceiveMessage(
-				message => {
-					if (message.command == 'selectable-image-clicked') {
-						OnSelectableImageClicked(message)
+				// Event fired when changing selection in the active text editor
+				vscode.window.onDidChangeTextEditorSelection(changeEvent => {
+					if (blockNextOnTextEditorSelectionEvent == false) {
+						if (vscode.window.activeTextEditor) {
+							lastActiveTextEditor = vscode.window.activeTextEditor
+						}
+						OnUserChangedSelection(changeEvent)
 					}
-					else if (message.command == 'rename-to-3-digits') {
-						RenameFilesTo3Digits(message)
-					}
+				})
+
+				//currentPanel.webview.html = getWebviewContent('Coding Cat');
+
+				// Handle messages from the webview
+				currentPanel.webview.onDidReceiveMessage(
+					message => {
+						if (message.command == 'selectable-image-clicked') {
+							OnSelectableImageClicked(message)
+						} else if (message.command == 'rename-to-3-digits') {
+							RenameFilesTo3Digits(message)
+						} else if (message.command == 'effect-slider-change' && lastActiveTextEditor) {
+							OnSliderInput(message)
+						}
+					},
+					undefined,
+					context.subscriptions
+				);
+
+				// Reset when the current panel is closed
+				currentPanel.onDidDispose(
+				() => {
+					//if (vscode.window.activeTextEditor.)
+					currentPanel = undefined;
 				},
-				undefined,
+				null,
 				context.subscriptions
-			);
-
-			// Reset when the current panel is closed
-			currentPanel.onDidDispose(
-			() => {
-				//if (vscode.window.activeTextEditor.)
-				currentPanel = undefined;
-			},
-			null,
-			context.subscriptions
-			);
-		}
+				);
+			}
 		})
 	);
+}
+
+function OnSliderInput (message) {
+	let selectedLineAt = lastActiveTextEditor.selection.active.line
+	let line = lastActiveTextEditor.document.lineAt(selectedLineAt);
+
+	switch (message.control) {
+		case 'duration':
+			ReplacePandaParam(line, 0, GetAsPandaFloat(message.value.toFixed(2)))
+			break;
+		case 'zoom':
+			ReplacePandaParam(line, 1, GetAsPandaFloat(message.value.toFixed(2)))
+			break;
+		case 'position':
+			ReplacePandaParam(line, 2, GetAsPandaFloat(message.value.toFixed(2)))
+			break;
+		case 'start-margin':
+			ReplacePandaParam(line, 3, GetAsPandaFloat(message.value.toFixed(2)))
+			break;
+		case 'end-margin':
+			ReplacePandaParam(line, 4, GetAsPandaFloat(message.value.toFixed(2)))
+			break;
+	}
+
+	PlaceTextEditorCursorAtEndOfLine(selectedLineAt)
+}
+
+function PlaceTextEditorCursorAtEndOfLine(selectedLineAt) {
+	let line = lastActiveTextEditor.document.lineAt(selectedLineAt);
+	let pos = new vscode.Position(selectedLineAt, line.range.end)
+	lastActiveTextEditor.selections = [new vscode.Selection(pos, pos)]
+}
+
+function GetAsPandaFloat(value) {
+	if (String(value).indexOf('.') == -1) {
+		return value + '.0'
+	}
+	return value
+}
+
+function ReplacePandaParam (line, paramNumber, newParam) {
+	let newLine = line.text
+	const paramsStart = line.text.indexOf('(')
+	const paramsEnd = line.text.lastIndexOf(')')
+	const command = line.text.slice(0, paramsStart)
+	let params = line.text.slice(paramsStart + 1, paramsEnd).split(',')
+	if (paramNumber < params.length) {
+		params[paramNumber] = (paramNumber == 0 ? '' : ' ') + newParam
+	} else {
+		for (let i = params.length; i < paramNumber; i++) {
+			params.push((paramNumber == 0 ? '' : ' ') + '0.0')
+		}
+		params.push((paramNumber == 0 ? '' : ' ') + newParam)
+	}
+	newLine = line.text.slice(0, paramsStart) + '(' + params.join(',') + line.text.slice(paramsEnd)
+
+	blockOnTextEditorSelectionEvent = true
+
+	lastActiveTextEditor.edit(editBuilder => {
+		editBuilder.replace(line.range, newLine)
+		vscode.window.activeTextEditor = lastActiveTextEditor
+		vscode.window.showTextDocument(lastActiveTextEditor.document, vscode.ViewColumn.One, false)
+	}).then(() => {
+		setTimeout(() => {
+			OnUserChangedSelection(null)
+			blockOnTextEditorSelectionEvent = false
+		}, 100)
+	})
 }
 
 function RenameFilesTo3Digits (message) {
@@ -177,74 +255,75 @@ function savePandaGUIData () {
 }
 
 function OnSelectableImageClicked (message) {
-	switch (message.command) {
-		case 'selectable-image-clicked':
-			const editor = lastActiveTextEditor
-			if (editor == null) {
-				console.log('NO EDITOR FOUND');
-				return;
-			}
+	const editor = lastActiveTextEditor
+	if (editor == null) {
+		console.log('NO EDITOR FOUND');
+		return;
+	}
 
-			let selectedLineAt = lastActiveTextEditor.selection.active.line
-			let line = lastActiveTextEditor.document.lineAt(selectedLineAt);
-			let newLine = line.text;
+	let selectedLineAt = lastActiveTextEditor.selection.active.line
+	let line = lastActiveTextEditor.document.lineAt(selectedLineAt);
+	let newLine = line.text;
 
-			if (message.imageType == 'cinematic') {
-				const delimiter = ':'
-				let parts = newLine.split(delimiter)
-				parts[1] = removeFileExtension(message.text)
-				newLine = parts.join(delimiter);
-	
-				editor.edit(editBuilder => {
-					editBuilder.replace(line.range, newLine);
-				});
-			} else if (message.imageType == 'portrait') {
-				const imageName = removeFileExtension(message.text)
-				const startDelimiter = '['
-				const endDelimiter = ']'
-				let testTagStartIndex = newLine.indexOf(startDelimiter)
-				let tagEndIndex = newLine.indexOf(endDelimiter)
-				if (testTagStartIndex > -1 &&
-					(line.text[testTagStartIndex + 1] >= '0' && line.text[testTagStartIndex + 1] <= '9'))
-				{
-					testTagStartIndex = line.text.indexOf(':') + 1
-					tagEndIndex = -1
-				}
-				let tagStartIndex = testTagStartIndex
-				if (tagStartIndex > -1 && tagEndIndex > -1) {
-					let partBeforeTag = newLine.slice(0, tagStartIndex + 1)
-					let partAfterTag = newLine.slice(tagEndIndex)
-					newLine = partBeforeTag + imageName + partAfterTag
-				} else {
-					newLine = newLine.slice(0, newLine.indexOf(':') + 1)
-                    + (startDelimiter + imageName + endDelimiter)
-                    + newLine.slice(newLine.indexOf(':') + 1);
-				}
+	if (message.imageType == 'cinematic') {
+		const delimiter = ':'
+		let parts = newLine.split(delimiter)
+		parts[1] = removeFileExtension(message.text)
+		newLine = parts.join(delimiter);
 
-				editor.edit(editBuilder => {
-					editBuilder.replace(line.range, newLine);
-				});
-			}
-
-			vscode.window.activeTextEditor = lastActiveTextEditor
-
-			vscode.window.showTextDocument(lastActiveTextEditor.document, vscode.ViewColumn.One, false);
-			
-			setTimeout(() => { OnUserChangedSelection(null) }, 100);
-			
-			return;
+		editor.edit(editBuilder => {
+			editBuilder.replace(line.range, newLine);
+		});
+	} else if (message.imageType == 'portrait') {
+		const imageName = removeFileExtension(message.text)
+		const startDelimiter = '['
+		const endDelimiter = ']'
+		let testTagStartIndex = newLine.indexOf(startDelimiter)
+		let tagEndIndex = newLine.indexOf(endDelimiter)
+		if (testTagStartIndex > -1 &&
+			(line.text[testTagStartIndex + 1] >= '0' && line.text[testTagStartIndex + 1] <= '9'))
+		{
+			testTagStartIndex = line.text.indexOf(':') + 1
+			tagEndIndex = -1
 		}
+		let tagStartIndex = testTagStartIndex
+		if (tagStartIndex > -1 && tagEndIndex > -1) {
+			let partBeforeTag = newLine.slice(0, tagStartIndex + 1)
+			let partAfterTag = newLine.slice(tagEndIndex)
+			newLine = partBeforeTag + imageName + partAfterTag
+		} else {
+			newLine = newLine.slice(0, newLine.indexOf(':') + 1)
+			+ (startDelimiter + imageName + endDelimiter)
+			+ newLine.slice(newLine.indexOf(':') + 1);
+		}
+
+		editor.edit(editBuilder => {
+			editBuilder.replace(line.range, newLine);
+		});
+	}
+
+	vscode.window.activeTextEditor = lastActiveTextEditor
+
+	vscode.window.showTextDocument(lastActiveTextEditor.document, vscode.ViewColumn.One, false);
+	
+	setTimeout(() => { OnUserChangedSelection(null) }, 100);
+	
+	return;
 }
 
 function OnUserChangedTextInDocument(changeEvent) {
-	console.log(`Did change: ${changeEvent.document.uri}`);
+	/*console.log(`Did change: ${changeEvent.document.uri}`);
 		
 	for (const change of changeEvent.contentChanges) {
 		 console.log(change.range); // range of text being replaced
 		 console.log(change.text); // text replacement
 	}
 
-	currentPanel.webview.postMessage('textChange')
+	currentPanel.webview.postMessage('textChange')*/
+	if (updateWebviewOnNextTextEditEvent == true) {
+		OnUserChangedSelection(null)
+		updateWebviewOnNextTextEditEvent = false
+	}
 }
 
 function OnUserChangedSelection(changeEvent) {
@@ -291,6 +370,7 @@ function IsCinematicEffectLine (line) {
 }
 
 function OnSelectedCinematicEffectLine (selectedLineAt, line) {
+	// Get next Cinematic Image
 	let basePath = ''
 	let imageName = null
 	for (let i = selectedLineAt; i < selectedLineAt + 10; i++) {
@@ -315,7 +395,7 @@ function OnSelectedCinematicEffectLine (selectedLineAt, line) {
 
 	currentPanel.webview.postMessage(
 		{
-			command: 'set-effect-image',
+			command: 'set-edit-effect-image',
 			image: { Uri: String(effectImageWebviewUri), fileName: path.join(imageName + '.jpg') },
 			lineContent: lineContent
 		})
@@ -389,14 +469,6 @@ function OnSelectedImageLine(selectedLineAt, line) {
 	let imageName = GetImageFromCinematicImageLine(line)
 	// Get basePath
 	let basePath = GetBasePath(selectedLineAt)
-
-	/*// Get URI to image
-	const imageDiskPath = vscode.Uri.file(
-		path.join(currentWorkspaceFolder, cinematicsFolderPath, basePath, imageName + '.jpg')
-	);
-
-	// And get the special URI to use with the webview
-	const imageWebviewUri = currentPanel.webview.asWebviewUri(imageDiskPath);*/
 
 	const currentImageWebviewUri = GetFileAndWebviewURIs(
 		path.join(currentWorkspaceFolder, cinematicsFolderPath, basePath, imageName + '.jpg')).webviewUri
@@ -532,8 +604,6 @@ function GetPortraitOfPrintLine (lineNumber) {
 	return ""
 }
 
-function GetParticipantCharacterNames (participants) {}
-
 function GetFirstLineAboveStartingWith (lineNumber, startsWith) {
 	var document = lastActiveTextEditor.document
 	for (let index = lineNumber; index >= 0; index--) {
@@ -546,7 +616,7 @@ function GetFirstLineAboveStartingWith (lineNumber, startsWith) {
 	return null
 }
 
-function customComponentContent(scriptWebviewUri) {
+function customComponentContent (scriptWebviewUri) {
 	return `<!DOCTYPE html>
   <html lang="en">
   <head>
@@ -561,13 +631,13 @@ function customComponentContent(scriptWebviewUri) {
   </html>`;
 }
 
-function getProjectRoot() {
+function getProjectRoot () {
 	return vscode.workspace.getWorkspaceFolder(
 	  vscode.window.activeTextEditor.document.uri
 	).uri.fsPath;
 }
 
-function getFileExtension(filename) {
+function getFileExtension (filename) {
     return filename.substring(filename.lastIndexOf('.')+1, filename.length) || filename;
 }
 
@@ -576,7 +646,7 @@ function removeFileExtension (str) {
 }
 
 // this method is called when your extension is deactivated
-function deactivate() {}
+function deactivate () {}
 
 module.exports = {
 	activate,

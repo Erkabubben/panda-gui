@@ -3,7 +3,7 @@
 const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
-const lineOps = require('./test-module.js');
+//const pandaUtils = require('./panda-utils.js');
 /*import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';*/
