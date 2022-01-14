@@ -3,10 +3,9 @@
 const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
-//const pandaUtils = require('./panda-utils.js');
-/*import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs';*/
+const pandaUtils = require('./panda-utils.js');
+const textEditorController = require('./text-editor-controller.js')(pandaUtils, vscode);
+const fetch = require('fetch-download');
 
 let currentPanel = undefined
 let lastActiveTextEditor = null
@@ -17,7 +16,6 @@ let pandaGUIData = null
 let gamepacksToBeLoaded = null
 let cinematicsFolderPath = ''
 let charactersFolderPath = ''
-let blockNextOnTextEditorSelectionEvent = false
 let updateWebviewOnNextTextEditEvent = false
 
 // this method is called when your extension is activated
@@ -27,7 +25,6 @@ let updateWebviewOnNextTextEditEvent = false
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
-
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
 	console.log('Congratulations, your extension "pandagui" is now active!');
@@ -59,19 +56,15 @@ function activate(context) {
 					enableScripts: true
 				});
 
-				//vscode.window.activeTextEditor
 				currentWorkspaceFolder = getProjectRoot()
 
 				pandaGUIData = require(path.join(currentWorkspaceFolder, pandaGUIDataPath))
-				//import * as pandaData from (path.join(currentWorkspaceFolder, pandaGUIDataPath))
 
 				gamepacksToBeLoaded = setGamepacksToBeLoadedArray()
 				cinematicsFolderPath = path.join(
 					'Assets' , '_Project', 'Resources', 'Gamepacks', gamepacksToBeLoaded[0], 'Cinematics')
 				charactersFolderPath = path.join(
 					'Assets' , '_Project', 'Resources', 'Gamepacks', gamepacksToBeLoaded[0], 'Characters')
-
-				//gamepacksToBeLoaded = setGamepacksToBeLoadedArray()
 
 				// Get path to resource on disk
 				const onDiskPath = vscode.Uri.file(
@@ -90,12 +83,11 @@ function activate(context) {
 
 				// Event fired when changing selection in the active text editor
 				vscode.window.onDidChangeTextEditorSelection(changeEvent => {
-					if (blockNextOnTextEditorSelectionEvent == false) {
-						if (vscode.window.activeTextEditor) {
-							lastActiveTextEditor = vscode.window.activeTextEditor
-						}
-						OnUserChangedSelection(changeEvent)
+					if (vscode.window.activeTextEditor) {
+						lastActiveTextEditor = vscode.window.activeTextEditor
+						textEditorController.lastActiveTextEditor = vscode.window.activeTextEditor;
 					}
+					OnUserChangedSelection(changeEvent)
 				})
 
 				//currentPanel.webview.html = getWebviewContent('Coding Cat');
@@ -107,8 +99,8 @@ function activate(context) {
 							OnSelectableImageClicked(message)
 						} else if (message.command == 'rename-to-3-digits') {
 							RenameFilesTo3Digits(message)
-						} else if (message.command == 'effect-slider-change' && lastActiveTextEditor) {
-							SetPandaParam(message.paramNumber, message.value)
+						} else if (message.command == 'effect-slider-change' && textEditorController.lastActiveTextEditor) {
+							textEditorController.SetParamOfSelectedLine(message.paramNumber, pandaUtils.GetAsPandaFloat(message.value.toFixed(2)))
 						}
 					},
 					undefined,
@@ -127,76 +119,6 @@ function activate(context) {
 			}
 		})
 	);
-}
-
-function SetPandaParam (paramNumber, newValue) {
-	let selectedLineAt = lastActiveTextEditor.selection.active.line
-	let line = lastActiveTextEditor.document.lineAt(selectedLineAt);
-
-	ReplacePandaParam(line, paramNumber, GetAsPandaFloat(newValue.toFixed(2)))
-
-	/*switch (message.control) {
-		case 'duration':
-			ReplacePandaParam(line, 0, GetAsPandaFloat(message.value.toFixed(2)))
-			break;
-		case 'zoom':
-			ReplacePandaParam(line, 1, GetAsPandaFloat(message.value.toFixed(2)))
-			break;
-		case 'position':
-			ReplacePandaParam(line, 2, GetAsPandaFloat(message.value.toFixed(2)))
-			break;
-		case 'start-margin':
-			ReplacePandaParam(line, 3, GetAsPandaFloat(message.value.toFixed(2)))
-			break;
-		case 'end-margin':
-			ReplacePandaParam(line, 4, GetAsPandaFloat(message.value.toFixed(2)))
-			break;
-	}*/
-
-	PlaceTextEditorCursorAtEndOfLine(selectedLineAt)
-}
-
-function PlaceTextEditorCursorAtEndOfLine(selectedLineAt) {
-	let line = lastActiveTextEditor.document.lineAt(selectedLineAt);
-	let pos = new vscode.Position(selectedLineAt, line.range.end)
-	lastActiveTextEditor.selections = [new vscode.Selection(pos, pos)]
-}
-
-function GetAsPandaFloat(value) {
-	if (String(value).indexOf('.') == -1) {
-		return value + '.0'
-	}
-	return value
-}
-
-function ReplacePandaParam (line, paramNumber, newParam) {
-	let newLine = line.text
-	const paramsStart = line.text.indexOf('(')
-	const paramsEnd = line.text.lastIndexOf(')')
-	const command = line.text.slice(0, paramsStart)
-	let params = line.text.slice(paramsStart + 1, paramsEnd).split(',')
-	if (paramNumber < params.length) {
-		params[paramNumber] = (paramNumber == 0 ? '' : ' ') + newParam
-	} else {
-		for (let i = params.length; i < paramNumber; i++) {
-			params.push((paramNumber == 0 ? '' : ' ') + '0.0')
-		}
-		params.push((paramNumber == 0 ? '' : ' ') + newParam)
-	}
-	newLine = line.text.slice(0, paramsStart) + '(' + params.join(',') + line.text.slice(paramsEnd)
-
-	blockOnTextEditorSelectionEvent = true
-
-	lastActiveTextEditor.edit(editBuilder => {
-		editBuilder.replace(line.range, newLine)
-		vscode.window.activeTextEditor = lastActiveTextEditor
-		vscode.window.showTextDocument(lastActiveTextEditor.document, vscode.ViewColumn.One, false)
-	}).then(() => {
-		setTimeout(() => {
-			OnUserChangedSelection(null)
-			blockOnTextEditorSelectionEvent = false
-		}, 100)
-	})
 }
 
 function RenameFilesTo3Digits (message) {
@@ -273,9 +195,8 @@ function OnSelectableImageClicked (message) {
 		parts[1] = removeFileExtension(message.text)
 		newLine = parts.join(delimiter);
 
-		editor.edit(editBuilder => {
-			editBuilder.replace(line.range, newLine);
-		});
+		textEditorController.ReplaceLine(line, newLine)
+		/*textEditorController.SetParamOfSelectedLine(0, removeFileExtension(message.text))*/
 	} else if (message.imageType == 'portrait') {
 		const imageName = removeFileExtension(message.text)
 		const startDelimiter = '['
@@ -299,18 +220,12 @@ function OnSelectableImageClicked (message) {
 			+ newLine.slice(newLine.indexOf(':') + 1);
 		}
 
-		editor.edit(editBuilder => {
-			editBuilder.replace(line.range, newLine);
-		});
+		textEditorController.ReplaceLine(line, newLine)
 	}
 
-	vscode.window.activeTextEditor = lastActiveTextEditor
-
-	vscode.window.showTextDocument(lastActiveTextEditor.document, vscode.ViewColumn.One, false);
-	
-	setTimeout(() => { OnUserChangedSelection(null) }, 100);
-	
-	return;
+	setTimeout(() => {
+		OnUserChangedSelection(null)
+	}, 100)
 }
 
 function OnUserChangedTextInDocument(changeEvent) {
@@ -336,16 +251,16 @@ function OnUserChangedSelection(changeEvent) {
 	let selectedLineAt = lastActiveTextEditor.selection.active.line
 	let line = lastActiveTextEditor.document.lineAt(selectedLineAt);
 
-	console.log(DeterminePandaOrBambooLine(line))
+	//console.log(pandaUtils.DeterminePandaOrBambooLine(line))
 
 	if (IsCinematicImageLine(line)) {
-		console.log(GetBambooLineContent(line))
+		console.log(pandaUtils.GetBambooLineContent(line))
 		OnSelectedImageLine(selectedLineAt, line)
 	} else if (IsPrintLine(line)) {
-		console.log(GetBambooLineContent(line))
+		console.log(pandaUtils.GetBambooLineContent(line))
 		OnSelectedPrintLine(selectedLineAt, line)
 	} else if (IsCinematicEffectLine(line)) {
-		console.log(GetPandaLineContent(line))
+		console.log(pandaUtils.GetPandaLineContent(line))
 		OnSelectedCinematicEffectLine(selectedLineAt, line)
 	} else {
 		currentPanel.webview.postMessage({ command: 'set-state', state: 'none'})
@@ -368,7 +283,7 @@ function IsPrintLine (line) {
 }
 
 function IsCinematicEffectLine (line) {
-	return line.text.startsWith('Pan', line.firstNonWhitespaceCharacterIndex)
+	return line.text.startsWith('Camera', line.firstNonWhitespaceCharacterIndex)
 }
 
 function OnSelectedCinematicEffectLine (selectedLineAt, line) {
@@ -378,8 +293,8 @@ function OnSelectedCinematicEffectLine (selectedLineAt, line) {
 	for (let i = selectedLineAt; i < selectedLineAt + 10; i++) {
 		let lineCheckedForCinematicImage = lastActiveTextEditor.document.lineAt(i)
 		if (IsCinematicImageLine(lineCheckedForCinematicImage)) {
-			basePath = GetBasePath(i)
-			imageName = GetImageFromCinematicImageLine(lineCheckedForCinematicImage)
+			basePath = pandaUtils.GetBasePath(lastActiveTextEditor, i)
+			imageName = pandaUtils.GetImageFromCinematicImageLine(lineCheckedForCinematicImage)
 			break
 		}
 	}
@@ -393,7 +308,7 @@ function OnSelectedCinematicEffectLine (selectedLineAt, line) {
 	const effectImageWebviewUri = GetFileAndWebviewURIs(
 		path.join(currentWorkspaceFolder, cinematicsFolderPath, basePath, imageName + '.jpg')).webviewUri
 
-	const lineContent = GetPandaLineContent(line)
+	const lineContent = pandaUtils.GetPandaLineContent(line)
 
 	currentPanel.webview.postMessage(
 		{
@@ -411,66 +326,11 @@ function GetFileAndWebviewURIs(path) {
 	return { fileUri: fileDiskPath, webviewUri: fileWebviewUri }
 }
 
-function GetImageFromCinematicImageLine(line) {
-	return line.text.split(':')[1].split(';')[0]
-}
-
-function GetBambooLineContent(line) {
-	const lineText = line.text.trim()
-	const paramsStart = lineText.indexOf(':')
-	const command = lineText.slice(0, paramsStart)
-	const params = lineText.slice(paramsStart + 1).split(',')
-	for (let i = 0; i < params.length; i++) {
-		params[i] = params[i].trim()
-	}
-	return {
-		command: command,
-		params: ParseParams(params)
-	}
-}
-
-function GetPandaLineContent(line) {
-	const lineText = line.text.trim()
-	const paramsStart = lineText.indexOf('(')
-	const paramsEnd = lineText.lastIndexOf(')')
-	const command = lineText.slice(0, paramsStart)
-	const params = lineText.slice(paramsStart + 1, paramsEnd).split(',')
-	for (let i = 0; i < params.length; i++) {
-		params[i] = params[i].trim()
-	}
-	return {
-		command: command,
-		params: ParseParams(params)
-	}
-}
-
-function DeterminePandaOrBambooLine(line) {
-	const pandaParamsStart = line.text.indexOf('(')
-	const bambooParamsStart = line.text.indexOf(':')
-	for (let i = 0; i < line.text.length; i++) {
-		if (line.text[i] == '(') {
-			return 'panda'
-		} else if (line.text[i] == ':') {
-			return 'bamboo'
-		}
-	}
-	return 'none'
-}
-
-function ParseParams(params) {
-	for (let i = 0; i < params.length; i++) {
-		if (params[i].startsWith("\"") && params[i].endsWith("\"")) {
-			params[i] = params[i].slice(1, params[i].length - 1)
-		}
-	}
-	return params
-}
-
 function OnSelectedImageLine(selectedLineAt, line) {
 	let lineText = line.text.trim()
-	let imageName = GetImageFromCinematicImageLine(line)
+	let imageName = pandaUtils.GetImageFromCinematicImageLine(line)
 	// Get basePath
-	let basePath = GetBasePath(selectedLineAt)
+	let basePath = pandaUtils.GetBasePath(lastActiveTextEditor, selectedLineAt)
 
 	const currentImageWebviewUri = GetFileAndWebviewURIs(
 		path.join(currentWorkspaceFolder, cinematicsFolderPath, basePath, imageName + '.jpg')).webviewUri
@@ -506,14 +366,14 @@ function OnSelectedImageLine(selectedLineAt, line) {
 
 function OnSelectedPrintLine (selectedLineAt, line) {
 	let lineText = line.text.trim()
-	let participants = GetParticipants(selectedLineAt)
+	let participants = pandaUtils.GetParticipants(lastActiveTextEditor, pandaGUIData, selectedLineAt)
 	if (participants == null || participants.length == 0)
 		return
 
 	let speaker = participants[lineText[0]]
 	console.log(speaker + " is speaking now.")
 
-	const portrait = GetPortraitOfPrintLine(selectedLineAt)
+	const portrait = pandaUtils.GetPortraitOfPrintLine(lastActiveTextEditor, selectedLineAt)
 
 	// Get URI to image
 	const imageDiskPath = vscode.Uri.file(
@@ -550,72 +410,6 @@ function OnSelectedPrintLine (selectedLineAt, line) {
 			basePath: '',
 			imageType: 'portrait'
 		})	
-}
-
-function GetBasePath (lineNumber) {
-	const line = GetFirstLineAboveStartingWith(lineNumber, '#path:')
-	return line != null ? line.text.split(':')[1].trim() : ""
-}
-
-function GetParticipants (lineNumber) {
-	const playerCharacter = pandaGUIData.playerCharacter
-	const line = GetFirstLineAboveStartingWith(lineNumber, 'SetParticipants(')
-	let participants = line != null ? line.text.split('"')[1].trim().split(',') : null
-
-	if (participants == null) {
-		return null
-	}
-
-	for (let index = 0; index < participants.length; index++) {
-		participants[index] = participants[index].replace(' ', '-').toLowerCase()
-		if (participants[index] == 'player'
-			|| participants[index] == 'playeronly'
-			|| participants[index] == 'player-only') {
-			participants[index] = playerCharacter
-		}
-	}
-
-	if (participants[0] == "none") {
-		return null;
-	}
-
-	if (participants[0] != playerCharacter) {
-		participants.splice(0, 0, playerCharacter)
-	}
-
-	return participants
-}
-
-function GetPortraitOfPrintLine (lineNumber) {
-	const line = lastActiveTextEditor.document.lineAt(lineNumber);
-	const startDelimiter = '['
-	const endDelimiter = ']'
-	let testTagStartIndex = line.text.indexOf(startDelimiter)
-	let tagEndIndex = line.text.indexOf(endDelimiter)
-	if (testTagStartIndex > -1 &&
-		(line.text[testTagStartIndex + 1] >= '0' && line.text[testTagStartIndex + 1] <= '9'))
-	{
-		testTagStartIndex = line.text.indexOf(':') + 1
-		tagEndIndex = -1
-	}
-	let tagStartIndex = testTagStartIndex
-	if (tagStartIndex > -1 && tagEndIndex > -1) {
-		let portrait = line.text.slice(tagStartIndex + 1, tagEndIndex)
-		return portrait
-	}
-	return ""
-}
-
-function GetFirstLineAboveStartingWith (lineNumber, startsWith) {
-	var document = lastActiveTextEditor.document
-	for (let index = lineNumber; index >= 0; index--) {
-		if (document.lineAt(index).text.startsWith(
-			startsWith, document.lineAt(index).firstNonWhitespaceCharacterIndex)) {
-				console.log('Line found at ' + index + ', ' + document.lineAt(index))
-				return document.lineAt(index)
-			}
-	}
-	return null
 }
 
 function customComponentContent (scriptWebviewUri) {

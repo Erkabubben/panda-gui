@@ -65,6 +65,15 @@ template.innerHTML = `
       position: absolute;
       width: 100%;
     }
+    #edit-effect-controls table .start-control {
+      background-color: green;
+    }
+    #edit-effect-controls table .end-control {
+      background-color: red;
+    }
+    #edit-effect-controls table label {
+      width: 32px;
+    }
   </style>
   <style id="edit-effect-start-frame-style"></style>
   <style id="edit-effect-end-frame-style"></style>
@@ -80,13 +89,53 @@ template.innerHTML = `
       <div id="edit-effect-end-frame"></div>
     </div>
     <div id="edit-effect-controls">
-      <input type="range" min="0" max="100" value="50" class="slider" id="duration-slider">
-      <input type="range" min="10" max="50" value="10" class="slider" id="start-zoom-slider">
-      <input type="range" min="0" max="100" value="50" class="slider" id="start-pos-x-slider">
-      <input type="range" min="0" max="100" value="50" class="slider" id="start-pos-y-slider">
-      <input type="range" min="10" max="50" value="10" class="slider" id="end-zoom-slider">
-      <input type="range" min="0" max="100" value="50" class="slider" id="end-pos-x-slider">
-      <input type="range" min="0" max="100" value="50" class="slider" id="end-pos-y-slider">
+      <label for="duration">Duration</label>
+      <input type="range" name="duration" min="0" max="200" value="50" class="slider" id="duration-slider">
+      <table>
+        <tr>
+          <th></th>
+          <th class="start-control">Start<button class="copy-all-button">></button></th>
+          <th class="end-control"><button class="copy-all-button"><</button>End</th>
+        </tr>
+        <tr>
+          <td>Zoom</td>
+          <td class="start-control">
+            <input type="range" min="10" max="50" value="10" class="slider" id="start-zoom-slider">
+            <button targetslider="#end-zoom-slider" class="copy-button">></button>
+          </td>
+          <td class="end-control">
+            <button targetslider="#start-zoom-slider" class="copy-button"><</button>
+            <input type="range" min="10" max="50" value="10" class="slider" id="end-zoom-slider">
+          </td>
+        </tr>
+        <tr>
+          <td>X</td>
+          <td class="start-control">
+            <input type="range" min="0" max="100" value="50" class="slider" id="start-pos-x-slider">
+            <button targetslider="#end-pos-x-slider" class="copy-button">></button>
+          </td>
+          <td class="end-control">
+            <button targetslider="#start-pos-x-slider" class="copy-button"><</button>
+            <input type="range" min="0" max="100" value="50" class="slider" id="end-pos-x-slider">
+          </td>
+        </tr>
+        <tr>
+          <td>Y</td>
+          <td class="start-control">
+            <input type="range" min="0" max="100" value="50" class="slider" id="start-pos-y-slider">
+            <button targetslider="#end-pos-y-slider" class="copy-button">></button>
+          </td>
+          <td class="end-control">
+            <button targetslider="#start-pos-y-slider" class="copy-button"><</button>
+            <input type="range" min="0" max="100" value="50" class="slider" id="end-pos-y-slider">
+          </td>
+        </tr>
+        <tr>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+      </table>
     </div>
   </div>
 `
@@ -120,6 +169,8 @@ customElements.define('effect-editor',
       this._editEffectStartFrameStyle = this.shadowRoot.querySelector('style#edit-effect-start-frame-style')
       this._editEffectEndFrameStyle = this.shadowRoot.querySelector('style#edit-effect-end-frame-style')
 
+      this._sliders = []
+
       this._durationSlider = this.sliderSetup('#duration-slider', 0, 0.1)
       this._startZoomSlider = this.sliderSetup('#start-zoom-slider', 1, 0.1)
       this._startPosXSlider = this.sliderSetup('#start-pos-x-slider', 2, 0.01)
@@ -127,6 +178,11 @@ customElements.define('effect-editor',
       this._endZoomSlider = this.sliderSetup('#end-zoom-slider', 4, 0.1)
       this._endPosXSlider = this.sliderSetup('#end-pos-x-slider', 5, 0.01)
       this._endPosYSlider = this.sliderSetup('#end-pos-y-slider', 6, 0.01)
+
+      this.updateSliderValueLabels()
+
+      this.copyButtonsSetup(this.shadowRoot.querySelectorAll('#edit-effect-controls table tr .copy-button'))
+      this._startZoomSlider.on
 
       // Preview Effect
       this._previewEffectImage = this._cinematicEffectState.querySelector('#preview-effect-image')
@@ -154,8 +210,24 @@ customElements.define('effect-editor',
       this._vscodeApi = vscodeApiInstance
     }
 
+    copyButtonsSetup (buttons) {
+      buttons.forEach(button => {
+        button.addEventListener("click", () => {
+          let targetSlider = this.shadowRoot.querySelector(button.getAttribute('targetslider'))
+          let fromSlider = button.parentNode.querySelector('input')
+          targetSlider.value = fromSlider.value
+          targetSlider.onchange()
+        })
+      })
+    }
+
     sliderSetup (querySelector, paramNumber, valueModifier) {
-      let slider = this._cinematicEffectState.querySelector(querySelector)
+      const slider = this._cinematicEffectState.querySelector(querySelector)
+      const valueLabel = document.createElement('label')
+      const name = querySelector[0] == '#' ? querySelector.slice(1) : querySelector
+      valueLabel.setAttribute('for', name)
+      slider.setAttribute('name', name)
+      slider.parentNode.insertBefore(valueLabel, slider.nextSibling)
       slider.onchange = () => {
         this._vscodeApi.postMessage({
           command: 'effect-slider-change',
@@ -164,10 +236,18 @@ customElements.define('effect-editor',
         })
       }
       slider.oninput = () => {
+        valueLabel.textContent = (slider.value * valueModifier).toFixed(2)
         this.updateEditEffectFrameStyles()
         this.updatePreviewEffectStyle()
       }
+      this._sliders.push( { slider: slider, valueLabel: valueLabel, valueModifier: valueModifier })
       return slider
+    }
+
+    updateSliderValueLabels () {
+      this._sliders.forEach(obj => {
+        obj.valueLabel.textContent = String((obj.slider.value * obj.valueModifier).toFixed(2))
+      })
     }
 
     setEditEffectImage (event) {
@@ -181,7 +261,7 @@ customElements.define('effect-editor',
         endY: event.data.lineContent.params[6],
       }
 
-      this._durationSlider.value = params.duration
+      this._durationSlider.value = params.duration * 10
 
       if (event.data.lineContent.params.length > 1) {
         this._startZoomSlider.value = params.startZoom  * 10
@@ -205,7 +285,10 @@ customElements.define('effect-editor',
       this._editEffectImage.setAttribute('src', event.data.image.Uri)
       this._previewEffectImage.setAttribute('src', event.data.image.Uri)
 
+      this.updateSliderValueLabels()
+
       this.updateEditEffectFrameStyles()
+      this.updatePreviewEffectStyle()
     }
 
     updateEditEffectFrameStyles () {
@@ -256,6 +339,8 @@ customElements.define('effect-editor',
       let previewImageEndX = this.GetPreviewImagePositionFromZoomAndSlider(previewImageEndZoom, this._endPosXSlider)
       let previewImageEndY = this.GetPreviewImagePositionFromZoomAndSlider(previewImageEndZoom, this._endPosYSlider)
 
+      let duration = this._durationSlider.value * 0.1
+
       this._previewEffectStyle.textContent = `#preview-effect-image {
         transform: translate(-50%, 50%);
         width: ${previewImageStartZoom}%;
@@ -280,7 +365,7 @@ customElements.define('effect-editor',
       }
       #preview-effect-image {
         animation-name: preview-effect-animation;
-        animation-duration: ${this._durationSlider.value}s;
+        animation-duration: ${duration}s;
         animation-iteration-count: infinite;
         animation-timing-function: linear;
       }`

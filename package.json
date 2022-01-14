@@ -36,5 +36,9 @@
 		"mocha": "^9.1.1",
 		"typescript": "^4.4.3",
 		"@vscode/test-electron": "^1.6.2"
+	},
+	"dependencies": {
+		"fetch-download": "^1.1.1",
+		"vscode": "*"
 	}
 }

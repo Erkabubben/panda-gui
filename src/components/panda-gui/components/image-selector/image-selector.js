@@ -88,7 +88,7 @@
    </div>
    <div id="selectable-images-container"></div>
  `
- 
+
  /**
   * Define custom element.
   */

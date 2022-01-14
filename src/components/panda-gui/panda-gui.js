@@ -18,9 +18,9 @@ template.innerHTML = `
     :host {
       font-size: 1.2em;
       color:white;
-      padding:10px;
+      padding:4px;
       border:2px solid grey;
-      margin:10px;
+      margin:0px;
       float:left;
       border-radius: 2px;
       user-select: none;
