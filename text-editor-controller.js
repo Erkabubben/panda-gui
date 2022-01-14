@@ -1,5 +1,6 @@
-const pandaUtils = require('./panda-utils.js');
-const vscode = require('vscode');
+const pandaUtils = require('./panda-utils.js')
+const vscode = require('vscode')
+const ext = require('./ext-controller.js')
 
 class ClassForRequire {
 
@@ -9,15 +10,25 @@ class ClassForRequire {
 
 	}
 
+	LineAt(lineID) {
+		return this.lastActiveTextEditor.document.lineAt(lineID)
+	}
+
+	SelectedLine() {
+		return this.LineAt(this.lastActiveTextEditor.selection.active.line)
+	}
+
+	SelectedLineID() {
+		return this.lastActiveTextEditor.selection.active.line
+	}
+
 	SetParamOfSelectedLine (paramNumber, newValue) {
-		console.log()
-		let selectedLineAt = this.lastActiveTextEditor.selection.active.line
-		this.SetParamOfLineAt(selectedLineAt, paramNumber, newValue)
-		this.PlaceTextEditorCursorAtEndOfLine(selectedLineAt)
+		this.SetParamOfLineAt(this.SelectedLineID(), paramNumber, newValue)
+		this.PlaceTextEditorCursorAtEndOfLine(this.SelectedLineID())
 	}
 	
-	SetParamOfLineAt (lineAt, paramNumber, newValue) {
-		let line = this.lastActiveTextEditor.document.lineAt(lineAt);
+	SetParamOfLineAt (lineID, paramNumber, newValue) {
+		let line = this.LineAt(lineID);
 		let newLine = null
 	
 		if (pandaUtils.DeterminePandaOrBambooLine(line) === 'bamboo') {
@@ -38,7 +49,7 @@ class ClassForRequire {
 			vscode.window.showTextDocument(this.lastActiveTextEditor.document, vscode.ViewColumn.One, false)
 		}).then(() => {
 			setTimeout(() => {
-				//OnUserChangedSelection(null)
+				OnUserChangedSelection(null)
 			}, 100)
 		})
 	}
@@ -50,8 +61,4 @@ class ClassForRequire {
 	}
 }
 
-module.exports = (params) => {
-	return new ClassForRequire(params)
-}
-
-//module.exports = new ClassForRequire(pandaUtils)
+module.exports = new ClassForRequire()

@@ -1,7 +1,7 @@
 class ClassForRequire {
 
 	constructor() {
-		this.message = 'HEJ HÄR HAR INGET FÖRÄNDRATS'
+
 	}
 
 	GetAsPandaFloat (value) {
