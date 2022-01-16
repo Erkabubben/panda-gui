@@ -4,8 +4,9 @@ const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
 const pandaUtils = require('./panda-utils.js');
-const textEditorController = require('./text-editor-controller.js')
 const ext = require('./ext-controller.js');
+const textEditorController = require('./text-editor-controller.js')
+
 const fetch = require('fetch-download');
 
 // this method is called when your extension is activated
@@ -91,6 +92,9 @@ function activate(context) {
 						} else if (message.command == 'effect-slider-change' && textEditorController.lastActiveTextEditor) {
 							textEditorController.SetParamOfSelectedLine(message.paramNumber, pandaUtils.GetAsPandaFloat(message.value.toFixed(2)))
 						}
+						setTimeout(() => {
+							ext.OnUserChangedSelection(null)
+						}, 100)
 					},
 					undefined,
 					context.subscriptions
@@ -132,10 +136,6 @@ function OnUserChangedTextInDocument (changeEvent) {
 	}
 
 	currentPanel.webview.postMessage('textChange')*/
-	if (ext.updateWebviewOnNextTextEditEvent == true) {
-		OnUserChangedSelection(null)
-		ext.updateWebviewOnNextTextEditEvent = false
-	}
 }
 
 function customComponentContent (scriptWebviewUri) {

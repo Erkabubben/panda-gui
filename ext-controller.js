@@ -3,6 +3,7 @@ const path = require('path');
 const pandaUtils = require('./panda-utils.js');
 const vscode = require('vscode');
 const textEditorController = require('./text-editor-controller.js')
+const lineEditor = require('./line-editor.js');
 
 class ClassForRequire {
 
@@ -16,6 +17,10 @@ class ClassForRequire {
 		this.cinematicsFolderPath = ''
 		this.charactersFolderPath = ''
 		this.updateWebviewOnNextTextEditEvent = false
+		this.lineEditors = {
+			imageSelector: new lineEditor.ImageSelector(),
+			effectEditor: new lineEditor.EffectEditor()
+		}
 
 	}
 
@@ -62,16 +67,12 @@ class ClassForRequire {
 	
 			textEditorController.ReplaceLine(line, newLine)
 		}
-	
-		setTimeout(() => {
-			this.OnUserChangedSelection(null)
-		}, 100)
 	}
 
 	RenameFilesTo3Digits (message) {
 		let currentNumber = 1
 		for(let i = 0; i < message.files.length; i++) {
-			originalPath = message.files[i]
+			const originalPath = message.files[i]
 			if (path.extname(originalPath) == '.jpg' || path.extname(originalPath) == '.png') {
 				let newPath = path.join(path.dirname(originalPath), currentNumber.toString().padStart(3, '0') + path.extname(originalPath))
 				fs.rename(originalPath, newPath, function(err) {
@@ -119,9 +120,7 @@ class ClassForRequire {
 	
 		let selectedLineAt = textEditorController.lastActiveTextEditor.selection.active.line
 		let line = textEditorController.lastActiveTextEditor.document.lineAt(selectedLineAt);
-	
-		//console.log(pandaUtils.DeterminePandaOrBambooLine(line))
-	
+
 		if (this.IsCinematicImageLine(line)) {
 			console.log(pandaUtils.GetBambooLineContent(line))
 			this.OnSelectedImageLine(selectedLineAt, line)

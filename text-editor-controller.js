@@ -41,16 +41,12 @@ class ClassForRequire {
 			this.ReplaceLine(line, newLine)
 		}
 	}
-	
+
 	ReplaceLine (line, newLine) {
 		this.lastActiveTextEditor.edit(editBuilder => {
 			editBuilder.replace(line.range, newLine)
 			//this.vscode.window.activeTextEditor = lastActiveTextEditor
 			vscode.window.showTextDocument(this.lastActiveTextEditor.document, vscode.ViewColumn.One, false)
-		}).then(() => {
-			setTimeout(() => {
-				OnUserChangedSelection(null)
-			}, 100)
 		})
 	}
 
