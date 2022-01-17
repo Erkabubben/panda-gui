@@ -6,7 +6,7 @@ const fs = require('fs');
 const pandaUtils = require('./panda-utils.js');
 const ext = require('./ext-controller.js');
 const textEditorController = require('./text-editor-controller.js')
-
+const extData = require('./ext-data.js');
 const fetch = require('fetch-download');
 
 // this method is called when your extension is activated
@@ -24,7 +24,7 @@ function activate(context) {
 	// Now provide the implementation of the command with  registerCommand
 	// The commandId parameter must match the command field in package.json
 
-	ext.currentPanel = vscode.WebviewPanel | undefined;
+	extData.currentPanel = vscode.WebviewPanel | undefined;
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('pandagui.pandaGUI', () => {
@@ -33,12 +33,12 @@ function activate(context) {
 				: vscode.ViewColumn.One
 				//: vscode.window.activeTextEditor.viewColumn;
 
-			if (ext.currentPanel) {
+			if (extData.currentPanel) {
 				// If we already have a panel, show it in the target column
-				ext.currentPanel.reveal(columnToShowIn);
+				extData.currentPanel.reveal(columnToShowIn);
 			} else {
 				// Otherwise, create a new panel
-				ext.currentPanel = vscode.window.createWebviewPanel(
+				extData.currentPanel = vscode.window.createWebviewPanel(
 				'catCoding',
 				'PandaGUI',
 				columnToShowIn,
@@ -47,25 +47,15 @@ function activate(context) {
 					enableScripts: true
 				});
 
-				ext.currentWorkspaceFolder = ext.getProjectRoot()
-
-				ext.pandaGUIData = require(path.join(ext.currentWorkspaceFolder, ext.pandaGUIDataPath))
-
-				ext.gamepacksToBeLoaded = setGamepacksToBeLoadedArray()
-				ext.cinematicsFolderPath = path.join(
-					'Assets' , '_Project', 'Resources', 'Gamepacks', ext.gamepacksToBeLoaded[0], 'Cinematics')
-				ext.charactersFolderPath = path.join(
-					'Assets' , '_Project', 'Resources', 'Gamepacks', ext.gamepacksToBeLoaded[0], 'Characters')
-
 				// Get path to resource on disk
 				const onDiskPath = vscode.Uri.file(
 					path.join(context.extensionPath, 'src', 'components', 'panda-gui', 'index.js')
 				);
 		
 				// And get the special URI to use with the webview
-				const scriptWebviewUri = ext.currentPanel.webview.asWebviewUri(onDiskPath);
+				const scriptWebviewUri = extData.currentPanel.webview.asWebviewUri(onDiskPath);
 
-				ext.currentPanel.webview.html = customComponentContent(scriptWebviewUri)
+				extData.currentPanel.webview.html = customComponentContent(scriptWebviewUri)
 
 				// Event fired on changes to the active text editor
 				vscode.workspace.onDidChangeTextDocument(changeEvent => {
@@ -83,15 +73,18 @@ function activate(context) {
 				//currentPanel.webview.html = getWebviewContent('Coding Cat');
 
 				// Handle messages from the webview
-				ext.currentPanel.webview.onDidReceiveMessage(
+				extData.currentPanel.webview.onDidReceiveMessage(
 					message => {
-						if (message.command == 'selectable-image-clicked') {
+						for (const [key, value] of Object.entries(ext.lineEditors)) {
+							value.OnMessage(message)
+						}
+						/*if (message.command == 'selectable-image-clicked') {
 							ext.OnSelectableImageClicked(message)
 						} else if (message.command == 'rename-to-3-digits') {
 							ext.RenameFilesTo3Digits(message)
 						} else if (message.command == 'effect-slider-change' && textEditorController.lastActiveTextEditor) {
 							textEditorController.SetParamOfSelectedLine(message.paramNumber, pandaUtils.GetAsPandaFloat(message.value.toFixed(2)))
-						}
+						}*/
 						setTimeout(() => {
 							ext.OnUserChangedSelection(null)
 						}, 100)
@@ -101,10 +94,10 @@ function activate(context) {
 				)
 
 				// Reset when the current panel is closed
-				ext.currentPanel.onDidDispose(
+				extData.currentPanel.onDidDispose(
 				() => {
 					//if (vscode.window.activeTextEditor.)
-					ext.currentPanel = undefined;
+					extData.currentPanel = undefined;
 				},
 				null,
 				context.subscriptions
@@ -112,19 +105,6 @@ function activate(context) {
 			}
 		})
 	);
-}
-
-function setGamepacksToBeLoadedArray () {
-	let arr = [ ext.pandaGUIData.activeGamepack.name ]
-	ext.pandaGUIData.activeGamepack.secondaryGamepacks.forEach(gamepackName => {
-		arr.push(gamepackName)
-	})
-	arr.push('_System')
-
-	arr.forEach(element => {
-		console.log(element)
-	})
-	return arr
 }
 
 function OnUserChangedTextInDocument (changeEvent) {

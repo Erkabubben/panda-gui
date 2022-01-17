@@ -18,7 +18,7 @@ template.innerHTML = `
     :host {
       font-size: 1.2em;
       color:white;
-      padding:4px;
+      padding:0px;
       border:2px solid grey;
       margin:0px;
       float:left;
@@ -30,10 +30,18 @@ template.innerHTML = `
       padding: 0;
     }
   </style>
-  <p>PANDA-GUI</p>
-  <file-operations></file-operations>
-  <image-selector></image-selector>
-  <effect-editor></effect-editor>
+  <div id="menu-bar" class="w3-bar w3-black">
+    <button id="Line" class="w3-bar-item w3-button">Line</button>
+    <button id="General" class="w3-bar-item w3-button">General</button>
+  </div>
+  <div id="Line" class="tab-div" style="display:none">
+    <image-selector></image-selector>
+    <effect-editor></effect-editor>
+  </div>
+  <div id="General" class="tab-div" style="display:none">
+    <file-operations></file-operations>
+  </div>
+  <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
 `
 
 /**
@@ -64,6 +72,27 @@ customElements.define('panda-gui',
       this._effectEditor.SetVSCodeApiInstance(this._vscodeApi)
 
       // Message Events
+      this._menuButtons = this.shadowRoot.querySelectorAll('#menu-bar button')
+
+      this._menuButtons.forEach(button => {
+        button.addEventListener('click', (event) => this.openTab(button.textContent))
+      })
+
+      this.openTab('Line')
+      
+    }
+
+    openTab(tabDivName) {
+      var i
+      var x = this.shadowRoot.querySelectorAll(".tab-div")
+      for (i = 0; i < x.length; i++) {
+        x[i].style.display = "none"
+      }
+      this.shadowRoot.querySelector('div' + '#' + tabDivName).style.display = "block"
+      for (i = 0; i < x.length; i++) {
+        this._menuButtons[i].className = this._menuButtons[i].className.replace(" w3-red", "");
+      }
+      this.shadowRoot.querySelector('#menu-bar button' + '#' + tabDivName).className += " w3-red";
     }
 
     getFileExtension(filename) {

@@ -1,8 +1,6 @@
 class ClassForRequire {
 
-	constructor() {
-
-	}
+	constructor() {}
 
 	GetAsPandaFloat (value) {
 		if (String(value).indexOf('.') == -1) {
@@ -11,42 +9,16 @@ class ClassForRequire {
 		return value
 	}
 
-	GetImageFromCinematicImageLine (line) {
-		return line.text.split(':')[1].split(';')[0]
-	}
-	
-	GetBambooLineContent (line) {
-		const lineText = line.text.trim()
-		const paramsStart = lineText.indexOf(':')
-		const command = lineText.slice(0, paramsStart)
-		const params = lineText.slice(paramsStart + 1).split(',')
+	ParseParams (params) {
 		for (let i = 0; i < params.length; i++) {
-			params[i] = params[i].trim()
+			if (params[i].startsWith("\"") && params[i].endsWith("\"")) {
+				params[i] = params[i].slice(1, params[i].length - 1)
+			}
 		}
-		return {
-			command: command,
-			params: this.ParseParams(params)
-		}
-	}
-	
-	GetPandaLineContent (line) {
-		const lineText = line.text.trim()
-		const paramsStart = lineText.indexOf('(')
-		const paramsEnd = lineText.lastIndexOf(')')
-		const command = lineText.slice(0, paramsStart)
-		const params = lineText.slice(paramsStart + 1, paramsEnd).split(',')
-		for (let i = 0; i < params.length; i++) {
-			params[i] = params[i].trim()
-		}
-		return {
-			command: command,
-			params: this.ParseParams(params)
-		}
+		return params
 	}
 	
 	DeterminePandaOrBambooLine (line) {
-		const pandaParamsStart = line.text.indexOf('(')
-		const bambooParamsStart = line.text.indexOf(':')
 		for (let i = 0; i < line.text.length; i++) {
 			if (line.text[i] == '(') {
 				return 'panda'
@@ -58,52 +30,76 @@ class ClassForRequire {
 	}
 
 	ReplaceBambooParam (line, paramNumber, newParam) {
-		let newLine = line.text
-		const paramsStart = line.text.indexOf(':')
-		// TODO: Allow line comments
-		//const paramsEnd = line.text.lastIndexOf('//')
-		let testEndStr = line.text
-		testEndStr.trimEnd()
-		const paramsEnd = testEndStr.charAt(testEndStr.length - 1)
-		const command = line.text.slice(0, paramsStart)
-		let params = line.text.slice(paramsStart + 1, paramsEnd).split(';')
-		if (paramNumber < params.length) {
-			params[paramNumber] = (paramNumber == 0 ? '' : ' ') + newParam
-		} else {
-			for (let i = params.length; i < paramNumber; i++) {
-				params.push((paramNumber == 0 ? '' : ' ') + '0.0')
-			}
-			params.push((paramNumber == 0 ? '' : ' ') + newParam)
-		}
-		newLine = line.text.slice(0, paramsStart) + ':' + params.join(';') + line.text.slice(paramsEnd)
-		return newLine
+		const parts = this.GetPartsOfLine(line, 'bamboo')
+		this.ReplaceParamsArrayItem(parts, paramNumber, newParam)
+		return this.AssembleLine(parts, 'bamboo')
 	}
 
 	ReplacePandaParam (line, paramNumber, newParam) {
-		let newLine = line.text
-		const paramsStart = line.text.indexOf('(')
-		const paramsEnd = line.text.lastIndexOf(')')
-		const command = line.text.slice(0, paramsStart)
-		let params = line.text.slice(paramsStart + 1, paramsEnd).split(',')
-		if (paramNumber < params.length) {
-			params[paramNumber] = (paramNumber == 0 ? '' : ' ') + newParam
-		} else {
-			for (let i = params.length; i < paramNumber; i++) {
-				params.push((paramNumber == 0 ? '' : ' ') + '0.0')
-			}
-			params.push((paramNumber == 0 ? '' : ' ') + newParam)
-		}
-		newLine = line.text.slice(0, paramsStart) + '(' + params.join(',') + line.text.slice(paramsEnd)
-		return newLine
+		const parts = this.GetPartsOfLine(line, 'panda')
+		this.ReplaceParamsArrayItem(parts, paramNumber, newParam)
+		return this.AssembleLine(parts, 'panda')
 	}
 
-	ParseParams (params) {
-		for (let i = 0; i < params.length; i++) {
-			if (params[i].startsWith("\"") && params[i].endsWith("\"")) {
-				params[i] = params[i].slice(1, params[i].length - 1)
+	SetLineComment (line, lineType, newLineComment) {
+		const parts = this.GetPartsOfLine(line, lineType)
+		parts.lineComment = '// ' + newLineComment
+		return this.AssembleLine(parts, lineType)
+	}
+
+	GetPartsOfLine (line, lineType) {
+		const isPanda = lineType === 'panda' ? true : false
+		const paramDelimiter = isPanda ? ',' : ';'
+		let paramsStartIndex, paramsEndIndex, command, params, afterParams, lineCommentStartIndex
+		paramsStartIndex = isPanda ? line.text.indexOf('(') : line.text.indexOf(':')
+		command = line.text.slice(0, paramsStartIndex)
+		lineCommentStartIndex = line.text.indexOf('//')
+		let testEndStr
+		if (isPanda) {
+			testEndStr = line.text.slice(0, line.text.indexOf(')'))
+		} else {
+			testEndStr = lineCommentStartIndex !== -1 ? line.text.slice(0, lineCommentStartIndex).trimEnd() : line.text.trimEnd()
+			while (testEndStr.length > 0 && testEndStr.charAt(testEndStr.length - 1) === ';') {
+				testEndStr = testEndStr.slice(0, -1)
 			}
 		}
-		return params
+		paramsEndIndex = testEndStr.length
+		params = line.text.slice(paramsStartIndex + 1, paramsEndIndex).split(paramDelimiter)
+		for (let i = 0; i < params.length; i++) {
+			params[i] = params[i].trim()
+		}
+		const lineComment = lineCommentStartIndex !== -1 ? line.text.slice(lineCommentStartIndex) : ''
+		return {
+			command: command,
+			params: params,
+			lineComment: lineComment
+		}
+	}
+
+	AssembleLine (partsObject, lineType) {
+		const isPanda = lineType === 'panda' ? true : false
+		let newline = partsObject.command
+		newline += isPanda ? '(' : ':'
+		for (let i = 0; i < partsObject.params.length; i++) {
+			newline += partsObject.params[i]
+			if (i < partsObject.params.length - 1) {
+				newline += (isPanda ? ',' : ';') + (isPanda ? ' ' : '')
+			}
+		}
+		newline += isPanda ? ')' : ''
+		newline += partsObject.lineComment !== '' ? (' ' + partsObject.lineComment) : ''
+		return newline
+	}
+
+	ReplaceParamsArrayItem(parts, paramNumber, newParam) {
+		if (paramNumber < parts.params.length) {
+			parts.params[paramNumber] = newParam.trim()
+		} else {
+			for (let i = parts.params.length; i < paramNumber; i++) {
+				parts.params.push('0.0')
+			}
+			parts.params.push(newParam.trim())
+		}
 	}
 
 	GetBasePath (lastActiveTextEditor, lineNumber) {

@@ -16,9 +16,9 @@
      :host {
        font-size: 1.2em;
        color:white;
-       padding:4px;
+       padding:0px;
        border:2px solid grey;
-       margin:4px;
+       margin:0px;
        float:left;
        border-radius: 2px;
        user-select: none;
